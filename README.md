@@ -276,3 +276,36 @@ npx playwright show-report
 - **Regex locators** are preferred over exact strings to reduce brittleness against minor GOV.UK content changes.
 - **`domcontentloaded`** is used consistently as the wait strategy — faster than `networkidle` and sufficient for server-rendered GOV.UK pages.
 - **Composite helper methods** (`calcHoursFullYear`, etc.) reduce duplication across tests, while still allowing fully explicit step-by-step tests (Flow A) where readability matters more than brevity.
+
+
+---
+
+### What I Would Improve Given More Time
+
+**Test data management** is the first thing I'd revisit. Right now, dates and expected values like `28`, `210`, `16.5` are scattered as magic numbers inside the spec files. I'd extract these into a dedicated fixture file or a data-driven structure, so each test case reads as a clear input/output pair and adding new scenarios requires no code changes — just a new data row.
+
+Alongside that, I'd apply **Boundary Value Analysis (BVA)** to drive the test data more rigorously. The current validation tests only probe a handful of invalid inputs, but BVA would give the data selection a systematic basis — for example, testing days worked per week at the exact boundaries of `0`, `1`, `7`, and `8`, or hours per week at `0`, `0.1`, `168`, and `168.1`. This is particularly important for a statutory calculator where off-by-one errors at the boundaries directly translate to incorrect legal entitlements. Combining BVA with a data-driven approach means the boundary cases live in a fixture table rather than being buried in individual test bodies, making coverage gaps immediately visible.
+
+**Environment configuration** is missing entirely. The base URL is hardcoded in `HolidayEntitlementPage.ts`. I'd move it into `playwright.config.ts` using the `baseURL` option, so the suite can target staging or production without touching test code.
+
+**Retry and timeout strategy** deserves more thought. The single `waitForTimeout(1000)` in `selectEndingPartWayThroughLeaveYear()` is a code smell — it's fragile and will either be too short on a slow connection or wastefully slow on a fast one. I'd replace it with a proper `waitFor` condition, polling for the radio button to become visible rather than guessing a fixed delay.
+
+**Cross-browser coverage** isn't configured at all. The config only runs the default browser. I'd add Chromium, Firefox, and WebKit as named projects in `playwright.config.ts`, and potentially add a mobile viewport project to verify the GOV.UK responsive layout behaves correctly on smaller screens.
+
+**CI integration** is absent. I'd add a GitHub Actions (or equivalent) workflow file that runs the suite headlessly on every pull request, uploads the Playwright HTML report as a build artefact, and posts a test summary comment back to the PR. The `trace: "on-first-retry"` config is already primed for this — it just needs the pipeline to use it.
+
+**Reporting** could be richer. Beyond the built-in HTML report, I'd integrate Allure or a similar reporter to produce a historical trend view, which makes it easy to spot flaky tests over time rather than investigating failures in isolation.
+
+**API-layer shortcuts** are worth considering for the mid-year flows. Navigating through five or six form steps to reach the step you actually want to test is slow and couples unrelated tests together — if step two breaks, every test after it fails for the wrong reason. Where GOV.UK supports it, I'd use `page.goto()` to jump directly to a deep URL or seed session state via the API, reserving full end-to-end navigation for the Flow A–D happy-path tests where the journey itself is the thing under test.
+
+**Accessibility assertions** could be layered in. Since the locators already use ARIA roles, adding `@axe-core/playwright` to run an automated accessibility scan on each results page would be a low-effort, high-value addition — especially relevant for a government service with legal accessibility obligations.
+
+**Visual regression testing** would catch unintended UI changes. Playwright's built-in `toHaveScreenshot()` could be applied to the results page so that any layout regressions in the entitlement summary are caught automatically, not just logical calculation errors.
+
+**Flakiness tracking** is something I'd formalise. The `waitForTimeout` workaround suggests there may be other timing sensitivities in the form. I'd run the suite with `--repeat-each=3` periodically in CI to surface any intermittent failures before they become production incidents.
+
+---
+
+### A Note on Test Scope
+
+One broader consideration worth flagging: the current suite tests the GOV.UK calculator as a black box, which is entirely appropriate for E2E testing. But the entitlement calculations themselves (28 days, 16.5 days etc.) are business-critical figures. If the GOV.UK service ever quietly changes its rounding logic or statutory minimums, these tests would catch it — but only if someone remembered to update the expected values. I'd complement this suite with a separate layer of unit tests against the underlying calculation logic (if that code is owned by your team), so the two layers catch different categories of regression independently. BVA would be equally valuable there — ensuring unit tests systematically probe the edges of each calculation rule rather than only the comfortable mid-range values the happy-path flows currently cover.
