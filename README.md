@@ -234,6 +234,13 @@ These options balance debugging capability with performance — artefacts are on
 
 ## Running the Tests
 
+### How to run after downloading and unzipping the repo:
+```bash
+npm install
+npx playwright install
+npm test
+```
+
 ### UI Mode (recommended for local development)
 
 ```bash
@@ -309,3 +316,74 @@ Alongside that, I'd apply **Boundary Value Analysis (BVA)** to drive the test da
 ### A Note on Test Scope
 
 One broader consideration worth flagging: the current suite tests the GOV.UK calculator as a black box, which is entirely appropriate for E2E testing. But the entitlement calculations themselves (28 days, 16.5 days etc.) are business-critical figures. If the GOV.UK service ever quietly changes its rounding logic or statutory minimums, these tests would catch it — but only if someone remembered to update the expected values. I'd complement this suite with a separate layer of unit tests against the underlying calculation logic (if that code is owned by your team), so the two layers catch different categories of regression independently. BVA would be equally valuable there — ensuring unit tests systematically probe the edges of each calculation rule rather than only the comfortable mid-range values the happy-path flows currently cover.
+
+Good spot — the updated `index.html` has one key difference from the previous version: the `<img>` tag no longer has an `alt` attribute at all, which actually makes ACC-004 worse and introduces a new distinct issue. Here is the fully revised audit reflecting this file:
+
+---
+
+# Task 2: Accessibility Audit — `index.html` Contact Form Page
+
+---
+
+## Bug Report — HIGH PRIORITY
+
+---
+
+**Bug ID:** ACC-001
+
+**Title:** Form inputs have no associated `<label>` elements — screen readers cannot identify field purpose
+
+**Environment:**
+- File: `index.html`
+- Browser: Any
+- Assistive Technology: Screen readers (NVDA, JAWS, VoiceOver)
+- WCAG Criterion: [1.3.1 Info and Relationships (Level A)](https://www.w3.org/WAI/WCAG21/Understanding/info-and-relationships.html)
+
+**Severity:** Critical
+
+**Description:**
+All three form fields (`Full name`, `Email`, `Your message`) use only `placeholder` attributes to convey their purpose. There are no `<label>` elements associated with any input. Placeholder text is not a valid substitute for a label — it disappears as soon as the user begins typing, leaving users with cognitive impairments or those using screen readers with no programmatic way to identify what information a field requires.
+
+**Steps to Reproduce:**
+1. Open `index.html` in a browser.
+2. Navigate to the form using a screen reader (e.g. NVDA + Chrome).
+3. Tab to the "Full name" input field.
+4. Observe that the screen reader announces the field with no label — it may read only "edit text" with no context.
+
+**Expected Result:**
+Each input and textarea should have a visible or visually-hidden `<label>` element programmatically associated via a matching `for` / `id` pair, so screen readers announce the field's purpose at all times.
+
+**Actual Result:**
+No `<label>` elements exist. Field purpose is conveyed only via placeholder text, which disappears on input and is not reliably announced by assistive technologies.
+
+
+---
+
+## All Other Accessibility Issues Found
+
+**ACC-002 — Image is missing an `alt` attribute entirely**
+The `<img>` tag has no `alt` attribute whatsoever. This is a WCAG 1.1.1 (Level A) failure — the most basic image accessibility requirement. Screen readers will fall back to announcing the filename (`robot-3114245_1280.png`) which is meaningless to the user. If the image is decorative, add `alt=""`. If it is meaningful, provide a descriptive value such as `alt="Illustration of an accessibility robot mascot"`.
+
+---
+
+**ACC-003 — Broken image path means the robot image fails to load**
+The `src` attribute references `images/robot-3114245_1280.png` but the image file provided is named `robot-3114245_1280.png` with no `images/` subdirectory. The image will not render, producing a broken image icon for sighted users. The path needs to match the actual file location.
+
+---
+
+**ACC-004 — Typo in page heading**
+The heading reads `"Accesibility"` — missing the second `s`. Screen readers will mispronounce this, and it undermines the credibility of the page. Fix: correct to `"Accessibility"`.
+
+---
+
+**ACC-005 — Email input uses `type="text"` instead of `type="email"`**
+Using `type="email"` enables mobile keyboards to show the correct layout, triggers built-in browser format validation, and signals field purpose to assistive technologies and autocomplete. Using `type="text"` loses all of these benefits.
+
+---
+
+**ACC-006 — Submit button has an ambiguous label and an unannounced emoji**
+The button label `"Done 🎉"` gives no indication of its purpose out of context. Screen readers will announce the party popper emoji as its full Unicode description. Fix: use a clearer label such as `"Submit contact form"` and wrap the emoji in `<span aria-hidden="true">` to suppress it from assistive technology.
+
+
+---
+
